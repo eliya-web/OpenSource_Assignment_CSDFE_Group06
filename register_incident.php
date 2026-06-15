@@ -79,5 +79,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <button type="submit">Register Incident</button>
         </form>
     </div>
+    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
+        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
+    </div>
 </body>
 </html>

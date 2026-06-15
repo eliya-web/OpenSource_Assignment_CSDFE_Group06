@@ -59,5 +59,8 @@ if (isset($_GET['incident_id'])) {
             <?php } else { echo "<p>No incident found with ID: $search</p>"; } ?>
         <?php } ?>
     </div>
+    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
+        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
+    </div>
 </body>
 </html>

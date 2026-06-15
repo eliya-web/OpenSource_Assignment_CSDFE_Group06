@@ -25,5 +25,8 @@ if (!isset($_SESSION['user_id'])) {
             <li><a href="search_incident.php">Search Incident by ID</a></li>
         </ul>
     </div>
+    <div style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 12px;">
+        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
+    </div>
 </body>
 </html>

@@ -23,6 +23,7 @@ if (!isset($_SESSION['user_id'])) {
             <li><a href="register_incident.php">Register New Incident</a></li>
             <li><a href="display_incidents.php">View All Incidents</a></li>
             <li><a href="search_incident.php">Search Incident by ID</a></li>
+            <li><a href="filter_status.php">Filter Incidents by Status</a></li>
         </ul>
     </div>
     <div style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 12px;">

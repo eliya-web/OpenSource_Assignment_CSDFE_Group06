@@ -60,5 +60,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </form>
         <p>Already have an account? <a href="login.php">Login here</a></p>
     </div>
+    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
+        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
+    </div>
 </body>
 </html>

@@ -8,79 +8,89 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $incident_id = "INC-" . strtoupper(uniqid());
-    $incident_title = mysqli_real_escape_string($conn, $_POST['incident_title']);
-    $incident_type = mysqli_real_escape_string($conn, $_POST['incident_type']);
-    $severity = mysqli_real_escape_string($conn, $_POST['severity']);
-    $description = mysqli_real_escape_string($conn, $_POST['description']);
-    $reporter_name = mysqli_real_escape_string($conn, $_SESSION['full_name']);
-    $status = mysqli_real_escape_string($conn, $_POST['status']);
+    $title     = mysqli_real_escape_string($conn, $_POST['incident_title']);
+    $type      = mysqli_real_escape_string($conn, $_POST['incident_type']);
+    $severity  = mysqli_real_escape_string($conn, $_POST['severity']);
+    $desc      = mysqli_real_escape_string($conn, $_POST['description']);
+    $reporter  = mysqli_real_escape_string($conn, $_POST['reporter_name']);
+    $incident_id = strtoupper(substr(md5(uniqid()), 0, 8));
 
-    $sql = "INSERT INTO incidents (incident_id, incident_title, incident_type, severity, description, reporter_name, status) 
-            VALUES ('$incident_id', '$incident_title', '$incident_type', '$severity', '$description', '$reporter_name', '$status')";
+    $sql = "INSERT INTO incidents (incident_id, incident_title, incident_type, severity, description, reporter_name, status)
+            VALUES ('$incident_id', '$title', '$type', '$severity', '$desc', '$reporter', 'Open')";
 
     if (mysqli_query($conn, $sql)) {
-        $success = "Incident registered successfully! Incident ID: $incident_id";
+        $success = "Incident reported successfully! Reference ID: $incident_id";
     } else {
-        $error = "Error: " . mysqli_error($conn);
+        $error = "Something went wrong. Please try again.";
     }
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Register Incident</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Incident | SIRS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Register Security Incident</h1>
-        <p>Welcome, <strong><?php echo $_SESSION['username']; ?></strong> | <a href="logout.php">Logout</a></p>
-        <a href="index.php">Back to Menu</a>
-        <?php
-        if (isset($success)) echo "<p style='color:green;'>$success</p>";
-        if (isset($error)) echo "<p style='color:red;'>$error</p>";
-        ?>
-        <form method="post">
-            <label>Incident Title:</label>
-            <input type="text" name="incident_title" required>
+    <?php include 'navbar.php'; ?>
 
-            <label>Incident Type:</label>
-            <select name="incident_type" required>
-                <option value="">Select Type</option>
-                <option value="Phishing">Phishing</option>
-                <option value="Malware">Malware</option>
-                <option value="DDoS">DDoS Attack</option>
-                <option value="Unauthorized Access">Unauthorized Access</option>
-                <option value="Data Breach">Data Breach</option>
-                <option value="Social Engineering">Social Engineering</option>
-                <option value="Other">Other</option>
-            </select>
+    <div class="page-content" id="pageContent">
+        <div class="card">
+            <div class="card-header">
+                <h1><i class="fas fa-exclamation-triangle"></i> Report Security Incident</h1>
+            </div>
 
-            <label>Severity:</label>
-            <select name="severity" required>
-                <option value="Low">Low</option>
-                <option value="Medium" selected>Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
-            </select>
+            <?php if (isset($success)): ?>
+                <div class="alert alert-green"><i class="fas fa-check-circle"></i> <?php echo $success; ?></div>
+            <?php endif; ?>
+            <?php if (isset($error)): ?>
+                <div class="alert alert-red"><i class="fas fa-times-circle"></i> <?php echo $error; ?></div>
+            <?php endif; ?>
 
-            <label>Description:</label>
-            <textarea name="description" rows="4" required></textarea>
-
-            <label>Status:</label>
-            <select name="status">
-                <option value="Open">Open</option>
-                <option value="Investigating">Investigating</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Closed">Closed</option>
-            </select>
-
-            <button type="submit">Register Incident</button>
-        </form>
+            <form method="post">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label><i class="fas fa-heading"></i> Incident Title</label>
+                        <input type="text" name="incident_title" placeholder="e.g. Unauthorised server access" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-tag"></i> Incident Type</label>
+                        <select name="incident_type" required>
+                            <option value="">Select type</option>
+                            <option>Phishing</option>
+                            <option>Malware</option>
+                            <option>Unauthorized Access</option>
+                            <option>Data Breach</option>
+                            <option>DDoS</option>
+                            <option>Social Engineering</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-exclamation-circle"></i> Severity</label>
+                        <select name="severity" required>
+                            <option value="">Select severity</option>
+                            <option>Low</option>
+                            <option>Medium</option>
+                            <option>High</option>
+                            <option>Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Reporter Name</label>
+                        <input type="text" name="reporter_name" placeholder="Your full name" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Description</label>
+                    <textarea name="description" placeholder="Describe the incident in detail..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Incident</button>
+            </form>
+        </div>
     </div>
-    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
-        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
-    </div>
-</body>
-</html>
+
+    <?php include 'footer.php'; ?>

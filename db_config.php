@@ -1,11 +1,11 @@
 <?php
-$host = "127.0.0.1";
-$user = "root";
-$pass = "";
-$db = "incident_db";
-$port = 3307;
+$host   = '127.0.0.1';
+$port   = 3307;
+$user   = 'root';
+$pass   = '';
+$dbname = 'incident_db';
 
-$conn = mysqli_connect($host, $user, $pass, $db, $port);
+$conn = mysqli_connect($host, $user, $pass, $dbname, $port);
 
 if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());

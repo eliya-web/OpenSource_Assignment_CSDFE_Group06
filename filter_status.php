@@ -7,66 +7,90 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$result = null;
-if (isset($_GET['status'])) {
-    $status = mysqli_real_escape_string($conn, $_GET['status']);
-    $sql = "SELECT * FROM incidents WHERE status = '$status' ORDER BY date_reported DESC";
-    $result = mysqli_query($conn, $sql);
+$selected = '';
+$results  = null;
+
+if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['status'])) {
+    $selected = mysqli_real_escape_string($conn, $_POST['status']);
+    $results  = mysqli_query($conn, "SELECT * FROM incidents WHERE status = '$selected' ORDER BY id DESC");
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Filter Incidents</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filter by Status | SIRS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Filter Incidents by Status</h1>
-        <p>Welcome, <strong><?php echo $_SESSION['username']; ?></strong> | <a href="logout.php">Logout</a></p>
-        <a href="index.php">Back to Menu</a>
-        <form method="get">
-            <label>Select Status:</label>
-            <select name="status" required>
-                <option value="">Select Status</option>
-                <option value="Open">Open</option>
-                <option value="Investigating">Investigating</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Closed">Closed</option>
-            </select>
-            <button type="submit">Filter</button>
-        </form>
-        <?php if ($result !== null) { ?>
-            <?php if (mysqli_num_rows($result) > 0) { ?>
-            <table>
-                <tr>
-                    <th>Incident ID</th>
-                    <th>Title</th>
-                    <th>Type</th>
-                    <th>Severity</th>
-                    <th>Description</th>
-                    <th>Reporter</th>
-                    <th>Date Reported</th>
-                    <th>Status</th>
-                </tr>
-                <?php while ($row = mysqli_fetch_assoc($result)) { ?>
-                <tr>
-                    <td><?php echo $row['incident_id']; ?></td>
-                    <td><?php echo $row['incident_title']; ?></td>
-                    <td><?php echo $row['incident_type']; ?></td>
-                    <td><?php echo $row['severity']; ?></td>
-                    <td><?php echo $row['description']; ?></td>
-                    <td><?php echo $row['reporter_name']; ?></td>
-                    <td><?php echo $row['date_reported']; ?></td>
-                    <td><?php echo $row['status']; ?></td>
-                </tr>
-                <?php } ?>
-            </table>
-            <?php } else { echo "<p>No incidents found with status: $status</p>"; } ?>
-        <?php } ?>
+    <?php include 'navbar.php'; ?>
+
+    <div class="page-content" id="pageContent">
+        <div class="card">
+            <div class="card-header">
+                <h1><i class="fas fa-filter"></i> Filter Incidents by Status</h1>
+            </div>
+
+            <form method="post" style="display:flex;gap:10px;">
+                <div class="form-group" style="margin:0;flex:1;">
+                    <select name="status" required>
+                        <option value="">Select status</option>
+                        <option value="Open" <?php echo $selected == 'Open' ? 'selected' : ''; ?>>Open</option>
+                        <option value="Investigating" <?php echo $selected == 'Investigating' ? 'selected' : ''; ?>>Investigating</option>
+                        <option value="Resolved" <?php echo $selected == 'Resolved' ? 'selected' : ''; ?>>Resolved</option>
+                        <option value="Closed" <?php echo $selected == 'Closed' ? 'selected' : ''; ?>>Closed</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary" style="height:44px;"><i class="fas fa-filter"></i> Filter</button>
+            </form>
+        </div>
+
+        <?php if ($results !== null): ?>
+            <div class="card">
+                <h2><i class="fas fa-list"></i> Status: <span class="st-<?php echo strtolower(str_replace(' ', '-', $selected)); ?>" style="padding:4px 14px;border-radius:99px;font-size:13px;font-weight:600;"><?php echo $selected; ?></span></h2>
+
+                <?php if (mysqli_num_rows($results) == 0): ?>
+                    <div class="empty">
+                        <div class="icon"><i class="fas fa-file-alt"></i></div>
+                        <h3>No incidents found</h3>
+                        <p>No incidents with status "<?php echo $selected; ?>" exist.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Title</th>
+                                    <th>Type</th>
+                                    <th>Severity</th>
+                                    <th>Reporter</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th style="text-align:center;">View</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while ($row = mysqli_fetch_assoc($results)): ?>
+                                    <tr>
+                                        <td><code><?php echo $row['incident_id']; ?></code></td>
+                                        <td><?php echo $row['incident_title']; ?></td>
+                                        <td><?php echo $row['incident_type']; ?></td>
+                                        <td><span class="sev-<?php echo strtolower($row['severity']); ?>"><?php echo $row['severity']; ?></span></td>
+                                        <td><?php echo $row['reporter_name']; ?></td>
+                                        <td><?php echo date('d M Y', strtotime($row['date_reported'])); ?></td>
+                                        <td><span class="st-<?php echo strtolower(str_replace(' ', '-', $row['status'])); ?>"><?php echo $row['status']; ?></span></td>
+                                        <td style="text-align:center;"><a href="view_incident.php?id=<?php echo $row['id']; ?>" class="btn btn-primary btn-sm" style="padding:4px 14px;font-size:12px;"><i class="fas fa-eye"></i> View</a></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     </div>
-    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
-        © 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
-    </div>
-</body>
-</html>
+
+    <?php include 'footer.php'; ?>

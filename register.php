@@ -2,66 +2,114 @@
 session_start();
 include 'db_config.php';
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $full_name = mysqli_real_escape_string($conn, $_POST['full_name']);
-    $username = mysqli_real_escape_string($conn, $_POST['username']);
-    $email = mysqli_real_escape_string($conn, $_POST['email']);
-    $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
-    if ($password !== $confirm_password) {
-        $error = "Passwords do not match!";
+$error = null;
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $error = "Invalid form submission.";
     } else {
-        $check = "SELECT * FROM users WHERE username = '$username' OR email = '$email'";
-        $result = mysqli_query($conn, $check);
-        if (mysqli_num_rows($result) > 0) {
-            $error = "Username or email already exists!";
+        $full_name        = mysqli_real_escape_string($conn, $_POST['full_name']);
+        $username         = mysqli_real_escape_string($conn, $_POST['username']);
+        $email            = mysqli_real_escape_string($conn, $_POST['email']);
+        $password         = $_POST['password'];
+        $confirm_password = $_POST['confirm_password'];
+
+        if ($password !== $confirm_password) {
+            $error = "Passwords do not match.";
+        } elseif (strlen($password) < 6) {
+            $error = "Password must be at least 6 characters.";
         } else {
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $sql = "INSERT INTO users (full_name, username, email, password) VALUES ('$full_name', '$username', '$email', '$hashed_password')";
-            if (mysqli_query($conn, $sql)) {
-                $_SESSION['success'] = "Registration successful! Please log in.";
-                header("Location: login.php");
-                exit();
+            $check = mysqli_query($conn, "SELECT * FROM users WHERE username = '$username' OR email = '$email'");
+            if (mysqli_num_rows($check) > 0) {
+                $error = "Username or email already taken.";
             } else {
-                $error = "Error: " . mysqli_error($conn);
+                $hashed = password_hash($password, PASSWORD_DEFAULT);
+                $sql    = "INSERT INTO users (full_name, username, email, password) VALUES ('$full_name', '$username', '$email', '$hashed')";
+                if (mysqli_query($conn, $sql)) {
+                    $_SESSION['success'] = "Account created! You can now sign in.";
+                    header("Location: login.php");
+                    exit();
+                } else {
+                    $error = "Something went wrong. Please try again.";
+                }
             }
         }
     }
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Register - Security Incident Reporting System</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account | SIRS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class="container">
-        <h1>Create an Account</h1>
-        <?php if (isset($error)) echo "<p style='color:red;'>$error</p>"; ?>
-        <form method="post">
-            <label>Full Name:</label>
-            <input type="text" name="full_name" required>
+<body style="padding-top:0">
+    <div class="auth-wrap">
+        <div class="auth-card<?php echo $error ? ' shake' : ''; ?>">
+            <div class="logo fade-up" style="animation-delay:0s;"><i class="fas fa-shield-alt"></i></div>
+            <h1 class="fade-up" style="animation-delay:0.05s;">Create account</h1>
+            <p class="sub fade-up" style="animation-delay:0.1s;">Join the Security Incident Reporting System</p>
 
-            <label>Username:</label>
-            <input type="text" name="username" required>
+            <?php if ($error): ?>
+                <div class="alert alert-red fade-up" style="animation-delay:0.1s;"><i class="fas fa-exclamation-triangle"></i> <?php echo $error; ?></div>
+            <?php endif; ?>
 
-            <label>Email:</label>
-            <input type="email" name="email" required>
+            <form method="post" id="authForm">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <div class="form-group fade-up" style="animation-delay:0.15s;">
+                    <label>Full Name</label>
+                    <input type="text" name="full_name" placeholder="e.g. Full name" required autofocus>
+                </div>
+                <div class="form-group fade-up" style="animation-delay:0.18s;">
+                    <label>Username</label>
+                    <input type="text" name="username" placeholder="Choose a username" required>
+                </div>
+                <div class="form-group fade-up" style="animation-delay:0.21s;">
+                    <label>Email</label>
+                    <input type="email" name="email" placeholder="Enter your email address" required>
+                </div>
+                <div class="form-group fade-up" style="animation-delay:0.24s;">
+                    <label>Password</label>
+                    <div class="pw-wrap">
+                        <input type="password" name="password" id="regPassword" placeholder="Create a strong password" required>
+                        <button type="button" class="pw-toggle" id="regPwToggle" tabindex="-1"><i class="far fa-eye"></i></button>
+                    </div>
+                    <div class="pw-strength"><div class="pw-strength-bar" id="pwStrengthBar"></div></div>
+                    <div class="pw-hint" id="pwHint">Use 6+ characters with a mix of letters & numbers</div>
+                    <ul class="pw-rules" id="pwRules">
+                        <li data-rule="length">At least 6 characters</li>
+                        <li data-rule="lower">One lowercase letter</li>
+                        <li data-rule="upper">One uppercase letter</li>
+                        <li data-rule="number">One number</li>
+                        <li data-rule="special">One special character (!@#$%^&*)</li>
+                    </ul>
+                </div>
+                <div class="form-group fade-up" style="animation-delay:0.27s;">
+                    <label>Confirm Password</label>
+                    <div class="pw-wrap">
+                        <input type="password" name="confirm_password" id="regConfirmPw" placeholder="Repeat your password" required>
+                        <button type="button" class="pw-toggle" id="regConfirmPwToggle" tabindex="-1"><i class="far fa-eye"></i></button>
+                    </div>
+                </div>
+                <button type="submit" class="btn fade-up" style="animation-delay:0.3s;" id="submitBtn">Create Account</button>
+            </form>
 
-            <label>Password:</label>
-            <input type="password" name="password" required>
+            <p class="link fade-up" style="animation-delay:0.35s;">Already have an account? <a href="login.php">Sign in</a></p>
+            <p class="link fade-up" style="animation-delay:0.35s;margin-top:4px;"><a href="landing.php"><i class="fas fa-home"></i> Back to home</a></p>
+        </div>
 
-            <label>Confirm Password:</label>
-            <input type="password" name="confirm_password" required>
-
-            <button type="submit">Register</button>
-        </form>
-        <p>Already have an account? <a href="login.php">Login here</a></p>
+        <div class="auth-credit">SIRS v1.0 <span>&mdash; Security Incident Reporting System</span></div>
     </div>
-    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
-        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
-    </div>
+
+    <div class="page-transition" id="pageTransition"></div>
+    <script>(function(){var e=document.getElementById('pageTransition');if(sessionStorage.getItem('sirs_ts')==='1'){sessionStorage.removeItem('sirs_ts');window.__sirs=1;e.style.transform='translateX(0)';e.style.transition='none'}else{e.style.transform='translateX(100%)';e.style.transition='none'}})()</script>
+    <div id="toast-wrap"></div>
+    <script src="script.js"></script>
 </body>
 </html>

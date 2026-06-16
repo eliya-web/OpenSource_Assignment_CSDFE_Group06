@@ -7,59 +7,135 @@ if (isset($_SESSION['user_id'])) {
     exit();
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = mysqli_real_escape_string($conn, $_POST['username']);
-    $password = $_POST['password'];
-
-    $sql = "SELECT * FROM users WHERE username = '$username'";
-    $result = mysqli_query($conn, $sql);
-
-    if (mysqli_num_rows($result) == 1) {
+// ===== Remember Me Auto-Login =====
+if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
+    $token = mysqli_real_escape_string($conn, $_COOKIE['remember_token']);
+    $result = mysqli_query($conn, "SELECT * FROM users WHERE remember_token = '$token'");
+    if (mysqli_num_rows($result) === 1) {
         $user = mysqli_fetch_assoc($result);
-        if (password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['full_name'] = $user['full_name'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['role'] = $user['role'];
-            header("Location: index.php");
-            exit();
-        } else {
-            $error = "Invalid password!";
-        }
+        $_SESSION['user_id']   = $user['id'];
+        $_SESSION['full_name'] = $user['full_name'];
+        $_SESSION['username']  = $user['username'];
+        $_SESSION['role']      = $user['role'];
+        header("Location: index.php");
+        exit();
     } else {
-        $error = "User not found!";
+        setcookie('remember_token', '', time() - 3600, '/');
+    }
+}
+
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$error = null;
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $error = "Invalid form submission.";
+    } else {
+        $username = mysqli_real_escape_string($conn, $_POST['username']);
+        $password = $_POST['password'];
+        $result   = mysqli_query($conn, "SELECT * FROM users WHERE username = '$username'");
+
+        if (mysqli_num_rows($result) === 1) {
+            $user = mysqli_fetch_assoc($result);
+
+            // ===== Check Account Lockout =====
+            if ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
+                $remaining = ceil((strtotime($user['locked_until']) - time()) / 60);
+                $error = "Account is locked. Try again in $remaining minute(s).";
+            } elseif (password_verify($password, $user['password'])) {
+                // ===== Successful Login =====
+                mysqli_query($conn, "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = {$user['id']}");
+
+                $_SESSION['user_id']   = $user['id'];
+                $_SESSION['full_name'] = $user['full_name'];
+                $_SESSION['username']  = $user['username'];
+                $_SESSION['role']      = $user['role'];
+
+                // ===== Remember Me =====
+                if (isset($_POST['remember'])) {
+                    $remember_token = bin2hex(random_bytes(32));
+                    mysqli_query($conn, "UPDATE users SET remember_token = '$remember_token' WHERE id = {$user['id']}");
+                    setcookie('remember_token', $remember_token, time() + 86400 * 30, '/');
+                }
+
+                header("Location: index.php");
+                exit();
+            } else {
+                // ===== Failed Login =====
+                $attempts = $user['failed_attempts'] + 1;
+                if ($attempts >= 5) {
+                    $lock_time = date('Y-m-d H:i:s', time() + 900); // 15 min
+                    mysqli_query($conn, "UPDATE users SET failed_attempts = $attempts, locked_until = '$lock_time' WHERE id = {$user['id']}");
+                    $error = "Too many failed attempts. Account locked for 15 minutes.";
+                } else {
+                    mysqli_query($conn, "UPDATE users SET failed_attempts = $attempts WHERE id = {$user['id']}");
+                    $remaining = 5 - $attempts;
+                    $error = "Invalid password. $remaining attempt(s) remaining before lockout.";
+                }
+            }
+        } else {
+            $error = "No account found with that username.";
+        }
     }
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login - Security Incident Reporting System</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | SIRS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class="container">
-        <h1>Login</h1>
-        <?php
-        if (isset($_SESSION['success'])) {
-            echo "<p style='color:green;'>" . $_SESSION['success'] . "</p>";
-            unset($_SESSION['success']);
-        }
-        if (isset($error)) echo "<p style='color:red;'>$error</p>";
-        ?>
-        <form method="post">
-            <label>Username:</label>
-            <input type="text" name="username" required>
+<body style="padding-top:0">
+    <div class="auth-wrap">
+        <div class="auth-card<?php echo $error ? ' shake' : ''; ?>">
+            <div class="logo fade-up" style="animation-delay:0s;"><i class="fas fa-shield-alt"></i></div>
+            <h1 class="fade-up" style="animation-delay:0.05s;">Welcome back</h1>
+            <p class="sub fade-up" style="animation-delay:0.1s;">Sign in to your account</p>
 
-            <label>Password:</label>
-            <input type="password" name="password" required>
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-green fade-up" style="animation-delay:0.1s;"><i class="fas fa-check"></i> <?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div>
+            <?php endif; ?>
 
-            <button type="submit">Login</button>
-        </form>
-        <p>Don't have an account? <a href="register.php">Register here</a></p>
+            <?php if ($error): ?>
+                <div class="alert alert-red fade-up" style="animation-delay:0.1s;"><i class="fas fa-exclamation-triangle"></i> <?php echo $error; ?></div>
+            <?php endif; ?>
+
+            <form method="post" id="authForm">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <div class="form-group fade-up" style="animation-delay:0.15s;">
+                    <label>Username</label>
+                    <input type="text" name="username" placeholder="Enter your username" required autofocus>
+                </div>
+                <div class="form-group fade-up" style="animation-delay:0.2s;">
+                    <label>Password</label>
+                    <div class="pw-wrap">
+                        <input type="password" name="password" id="loginPassword" placeholder="Enter your password" required>
+                        <button type="button" class="pw-toggle" id="loginPwToggle" tabindex="-1"><i class="far fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="check-group fade-up" style="animation-delay:0.25s;">
+                    <input type="checkbox" id="remember" name="remember">
+                    <label for="remember">Remember me</label>
+                </div>
+                <button type="submit" class="btn fade-up" style="animation-delay:0.3s;" id="submitBtn">Sign In</button>
+                <div class="forgot-link fade-up" style="animation-delay:0.35s;"><a href="forgot_password.php">Forgot password?</a></div>
+            </form>
+
+            <p class="link fade-up" style="animation-delay:0.35s;">Don't have an account? <a href="register.php">Register here</a></p>
+            <p class="link fade-up" style="animation-delay:0.35s;margin-top:4px;"><a href="landing.php"><i class="fas fa-home"></i> Back to home</a></p>
+        </div>
+
+        <div class="auth-credit">SIRS v1.0 <span>&mdash; Security Incident Reporting System</span></div>
     </div>
-    <div style="text-align: center; margin-top: 20px; color: #7f8c8d; font-size: 12px;">
-        &copy; 2026 CP 222 Open Source Technologies | Cyber Security & Digital Forensics Engineering
-    </div>
+
+    <div class="page-transition" id="pageTransition"></div>
+    <script>(function(){var e=document.getElementById('pageTransition');if(sessionStorage.getItem('sirs_ts')==='1'){sessionStorage.removeItem('sirs_ts');window.__sirs=1;e.style.transform='translateX(0)';e.style.transition='none'}else{e.style.transform='translateX(100%)';e.style.transition='none'}})()</script>
+    <div id="toast-wrap"></div>
+    <script src="script.js"></script>
 </body>
 </html>

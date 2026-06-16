@@ -1,0 +1,87 @@
+<?php
+session_start();
+include 'db_config.php';
+
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$message = null;
+$error   = null;
+$showLink = false;
+$resetUrl = '';
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $error = "Invalid form submission. Please try again.";
+    } else {
+        $email = mysqli_real_escape_string($conn, $_POST['email']);
+        $result = mysqli_query($conn, "SELECT * FROM users WHERE email = '$email'");
+
+        if (mysqli_num_rows($result) === 0) {
+            $error = "No account found with that email address.";
+        } else {
+            $user  = mysqli_fetch_assoc($result);
+            $token = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+
+            mysqli_query($conn, "UPDATE users SET reset_token = '$token', reset_expires = '$expires' WHERE id = {$user['id']}");
+
+            $message = "Password reset link has been generated.";
+            $showLink = true;
+            $resetUrl = "reset_password.php?token=$token";
+            $_SESSION['success'] = $message;
+        }
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forgot Password | SIRS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body style="padding-top:0">
+    <div class="auth-wrap">
+        <div class="auth-card<?php echo $error ? ' shake' : ''; ?>">
+            <div class="logo fade-up" style="animation-delay:0s;"><i class="fas fa-shield-alt"></i></div>
+            <h1 class="fade-up" style="animation-delay:0.05s;">Forgot password</h1>
+            <p class="sub fade-up" style="animation-delay:0.1s;">Enter your email to receive a reset link</p>
+
+            <?php if ($error): ?>
+                <div class="alert alert-red fade-up" style="animation-delay:0.1s;"><i class="fas fa-exclamation-triangle"></i> <?php echo $error; ?></div>
+            <?php endif; ?>
+
+            <?php if ($message): ?>
+                <div class="alert alert-green fade-up" style="animation-delay:0.1s;"><i class="fas fa-check"></i> <?php echo $message; ?></div>
+            <?php endif; ?>
+
+            <?php if ($showLink): ?>
+                <div class="alert alert-blue fade-up" style="animation-delay:0.15s;"><i class="fas fa-link"></i> Reset link: <a href="<?php echo $resetUrl; ?>" style="color:inherit;text-decoration:underline;">Click here to reset</a></div>
+            <?php endif; ?>
+
+            <form method="post" id="authForm">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                <div class="form-group fade-up" style="animation-delay:0.2s;">
+                    <label>Email Address</label>
+                    <input type="email" name="email" placeholder="Enter your email address" required autofocus>
+                </div>
+                <button type="submit" class="btn fade-up" style="animation-delay:0.25s;">Send Reset Link</button>
+            </form>
+
+            <p class="link fade-up" style="animation-delay:0.3s;"><a href="login.php"><i class="fas fa-arrow-left"></i> Back to sign in</a></p>
+            <p class="link fade-up" style="animation-delay:0.3s;margin-top:4px;"><a href="landing.php"><i class="fas fa-home"></i> Back to home</a></p>
+        </div>
+
+        <div class="auth-credit">SIRS v1.0 <span>&mdash; Security Incident Reporting System</span></div>
+    </div>
+
+    <div class="page-transition" id="pageTransition"></div>
+    <script>(function(){var e=document.getElementById('pageTransition');if(sessionStorage.getItem('sirs_ts')==='1'){sessionStorage.removeItem('sirs_ts');window.__sirs=1;e.style.transform='translateX(0)';e.style.transition='none'}else{e.style.transform='translateX(100%)';e.style.transition='none'}})()</script>
+    <div id="toast-wrap"></div>
+    <script src="script.js"></script>
+</body>
+</html>

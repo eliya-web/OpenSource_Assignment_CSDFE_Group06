@@ -1,6 +1,8 @@
 <?php
 $page = basename($_SERVER['PHP_SELF']);
-$initial = strtoupper(substr($_SESSION['username'], 0, 1));
+$u = htmlspecialchars($_SESSION['username'], ENT_QUOTES, 'UTF-8');
+$initial = strtoupper(substr($u, 0, 1));
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 ?>
 <nav class="navbar">
     <a href="index.php" class="navbar-brand">
@@ -19,9 +21,9 @@ $initial = strtoupper(substr($_SESSION['username'], 0, 1));
     <div class="navbar-right">
         <button class="theme-btn" id="themeToggle" title="Toggle theme"><i class="fas fa-moon"></i></button>
         <div class="navbar-user">
-            <span class="user-name"><?php echo $_SESSION['username']; ?></span>
+            <span class="user-name"><?php echo $u; ?></span>
             <div class="avatar"><?php echo $initial; ?></div>
-            <a href="logout.php">Logout</a>
+            <a href="logout.php" onclick="return confirm('Are you sure you want to logout?');">Logout</a>
         </div>
     </div>
 </nav>

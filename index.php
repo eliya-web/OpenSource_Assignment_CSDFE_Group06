@@ -7,10 +7,28 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$total    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM incidents"))['c'];
-$open     = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM incidents WHERE status = 'Open'"))['c'];
-$resolved = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM incidents WHERE status = 'Resolved'"))['c'];
-$critical = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM incidents WHERE severity = 'Critical'"))['c'];
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+
+function countAll($conn) {
+    $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM incidents");
+    mysqli_stmt_execute($stmt);
+    $c = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['c'];
+    mysqli_stmt_close($stmt);
+    return $c;
+}
+function countWhere($conn, $field, $value) {
+    $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM incidents WHERE $field = ?");
+    mysqli_stmt_bind_param($stmt, "s", $value);
+    mysqli_stmt_execute($stmt);
+    $c = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['c'];
+    mysqli_stmt_close($stmt);
+    return $c;
+}
+
+$total    = countAll($conn);
+$open     = countWhere($conn, "status", "Open");
+$resolved = countWhere($conn, "status", "Resolved");
+$critical = countWhere($conn, "severity", "Critical");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,7 +43,7 @@ $critical = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as c FROM in
     <?php include 'navbar.php'; ?>
 
     <div class="page-content" id="pageContent">
-        <h1 style="margin-bottom:20px;"><i class="fas fa-compass"></i> Welcome, <?php echo $_SESSION['full_name']; ?></h1>
+        <h1 style="margin-bottom:20px;"><i class="fas fa-compass"></i> Welcome, <?php echo h($_SESSION['full_name']); ?></h1>
 
         <div class="stats">
             <div class="stat">

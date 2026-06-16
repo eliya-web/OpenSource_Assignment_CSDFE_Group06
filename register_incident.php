@@ -8,19 +8,21 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $title     = mysqli_real_escape_string($conn, $_POST['incident_title']);
-    $type      = mysqli_real_escape_string($conn, $_POST['incident_type']);
-    $severity  = mysqli_real_escape_string($conn, $_POST['severity']);
-    $desc      = mysqli_real_escape_string($conn, $_POST['description']);
-    $reporter  = mysqli_real_escape_string($conn, $_POST['reporter_name']);
+    $title     = $_POST['incident_title'];
+    $type      = $_POST['incident_type'];
+    $severity  = $_POST['severity'];
+    $desc      = $_POST['description'];
+    $reporter  = $_POST['reporter_name'];
     $incident_id = "INC-" . strtoupper(substr(md5(uniqid()), 0, 8));
 
-    $sql = "INSERT INTO incidents (incident_id, incident_title, incident_type, severity, description, reporter_name, status)
-            VALUES ('$incident_id', '$title', '$type', '$severity', '$desc', '$reporter', 'Open')";
+    $stmt = mysqli_prepare($conn, "INSERT INTO incidents (incident_id, incident_title, incident_type, severity, description, reporter_name, status) VALUES (?, ?, ?, ?, ?, ?, 'Open')");
+    mysqli_stmt_bind_param($stmt, "ssssss", $incident_id, $title, $type, $severity, $desc, $reporter);
 
-    if (mysqli_query($conn, $sql)) {
+    if (mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
         $success = "Incident reported successfully! Reference ID: $incident_id";
     } else {
+        mysqli_stmt_close($stmt);
         $error = "Something went wrong. Please try again.";
     }
 }

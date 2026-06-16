@@ -9,19 +9,29 @@ if (isset($_SESSION['user_id'])) {
 
 // ===== Remember Me Auto-Login =====
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
-    $token = mysqli_real_escape_string($conn, $_COOKIE['remember_token']);
-    $result = mysqli_query($conn, "SELECT * FROM users WHERE remember_token = '$token'");
+    $token_raw = $_COOKIE['remember_token'];
+    $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE remember_token = ?");
+    mysqli_stmt_bind_param($stmt, "s", $token_raw);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
     if (mysqli_num_rows($result) === 1) {
         $user = mysqli_fetch_assoc($result);
+        session_regenerate_id(true);
         $_SESSION['user_id']   = $user['id'];
         $_SESSION['full_name'] = $user['full_name'];
         $_SESSION['username']  = $user['username'];
         $_SESSION['role']      = $user['role'];
+        mysqli_stmt_close($stmt);
         header("Location: index.php");
         exit();
-    } else {
-        setcookie('remember_token', '', time() - 3600, '/');
     }
+    mysqli_stmt_close($stmt);
+    setcookie('remember_token', '', [
+        'expires' => time() - 3600,
+        'path'    => '/',
+        'httponly' => true,
+        'samesite' => 'Strict'
+    ]);
 }
 
 if (!isset($_SESSION['csrf_token'])) {
@@ -33,12 +43,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission.";
     } else {
-        $username = mysqli_real_escape_string($conn, $_POST['username']);
+        $username_raw = $_POST['username'];
         $password = $_POST['password'];
-        $result   = mysqli_query($conn, "SELECT * FROM users WHERE username = '$username'");
+
+        $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE username = ?");
+        mysqli_stmt_bind_param($stmt, "s", $username_raw);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
 
         if (mysqli_num_rows($result) === 1) {
             $user = mysqli_fetch_assoc($result);
+            mysqli_stmt_close($stmt);
 
             // ===== Check Account Lockout =====
             if ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
@@ -46,8 +61,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $error = "Account is locked. Try again in $remaining minute(s).";
             } elseif (password_verify($password, $user['password'])) {
                 // ===== Successful Login =====
-                mysqli_query($conn, "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = {$user['id']}");
+                $ustmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?");
+                mysqli_stmt_bind_param($ustmt, "i", $user['id']);
+                mysqli_stmt_execute($ustmt);
+                mysqli_stmt_close($ustmt);
 
+                session_regenerate_id(true);
                 $_SESSION['user_id']   = $user['id'];
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['username']  = $user['username'];
@@ -56,8 +75,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 // ===== Remember Me =====
                 if (isset($_POST['remember'])) {
                     $remember_token = bin2hex(random_bytes(32));
-                    mysqli_query($conn, "UPDATE users SET remember_token = '$remember_token' WHERE id = {$user['id']}");
-                    setcookie('remember_token', $remember_token, time() + 86400 * 30, '/');
+                    $rstmt = mysqli_prepare($conn, "UPDATE users SET remember_token = ? WHERE id = ?");
+                    mysqli_stmt_bind_param($rstmt, "si", $remember_token, $user['id']);
+                    mysqli_stmt_execute($rstmt);
+                    mysqli_stmt_close($rstmt);
+                    setcookie('remember_token', $remember_token, [
+                        'expires'  => time() + 86400 * 30,
+                        'path'     => '/',
+                        'httponly' => true,
+                        'samesite' => 'Strict'
+                    ]);
                 }
 
                 header("Location: index.php");
@@ -66,17 +93,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 // ===== Failed Login =====
                 $attempts = $user['failed_attempts'] + 1;
                 if ($attempts >= 5) {
-                    $lock_time = date('Y-m-d H:i:s', time() + 900); // 15 min
-                    mysqli_query($conn, "UPDATE users SET failed_attempts = $attempts, locked_until = '$lock_time' WHERE id = {$user['id']}");
+                    $lock_time = date('Y-m-d H:i:s', time() + 900);
+                    $fstmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?");
+                    mysqli_stmt_bind_param($fstmt, "isi", $attempts, $lock_time, $user['id']);
+                    mysqli_stmt_execute($fstmt);
+                    mysqli_stmt_close($fstmt);
                     $error = "Too many failed attempts. Account locked for 15 minutes.";
                 } else {
-                    mysqli_query($conn, "UPDATE users SET failed_attempts = $attempts WHERE id = {$user['id']}");
+                    $fstmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = ? WHERE id = ?");
+                    mysqli_stmt_bind_param($fstmt, "ii", $attempts, $user['id']);
+                    mysqli_stmt_execute($fstmt);
+                    mysqli_stmt_close($fstmt);
                     $remaining = 5 - $attempts;
                     $error = "Invalid password. $remaining attempt(s) remaining before lockout.";
                 }
             }
         } else {
-            $error = "No account found with that username.";
+            mysqli_stmt_close($stmt);
+            $error = "Invalid credentials.";
         }
     }
 }
@@ -98,7 +132,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <p class="sub fade-up" style="animation-delay:0.1s;">Sign in to your account</p>
 
             <?php if (isset($_SESSION['success'])): ?>
-                <div class="alert alert-green fade-up" style="animation-delay:0.1s;"><i class="fas fa-check"></i> <?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div>
+                <div class="alert alert-green fade-up" style="animation-delay:0.1s;"><i class="fas fa-check"></i> <?php echo htmlspecialchars($_SESSION['success'], ENT_QUOTES, 'UTF-8'); unset($_SESSION['success']); ?></div>
             <?php endif; ?>
 
             <?php if ($error): ?>

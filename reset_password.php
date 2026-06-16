@@ -13,13 +13,17 @@ $email    = '';
 $token    = isset($_GET['token']) ? $_GET['token'] : (isset($_POST['token']) ? $_POST['token'] : '');
 
 if ($token) {
-    $token = mysqli_real_escape_string($conn, $token);
-    $result = mysqli_query($conn, "SELECT * FROM users WHERE reset_token = '$token' AND reset_expires > NOW()");
+    $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE reset_token = ? AND reset_expires > NOW()");
+    mysqli_stmt_bind_param($stmt, "s", $token);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
     if (mysqli_num_rows($result) === 1) {
         $user  = mysqli_fetch_assoc($result);
         $email = $user['email'];
         $valid = true;
-    } else {
+    }
+    mysqli_stmt_close($stmt);
+    if (!$valid) {
         $error = "This reset link is invalid or has expired.";
     }
 }
@@ -28,11 +32,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $valid) {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission.";
     } else {
-        $token = mysqli_real_escape_string($conn, $_POST['token']);
+        $token = $_POST['token'];
 
-        $result = mysqli_query($conn, "SELECT * FROM users WHERE reset_token = '$token' AND reset_expires > NOW()");
+        $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE reset_token = ? AND reset_expires > NOW()");
+        mysqli_stmt_bind_param($stmt, "s", $token);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
         if (mysqli_num_rows($result) === 1) {
             $user = mysqli_fetch_assoc($result);
+            mysqli_stmt_close($stmt);
             $password         = $_POST['password'];
             $confirm_password = $_POST['confirm_password'];
 
@@ -40,14 +48,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $valid) {
                 $error = "Passwords do not match.";
             } elseif (strlen($password) < 6) {
                 $error = "Password must be at least 6 characters.";
+            } elseif (!preg_match('/[A-Z]/', $password)) {
+                $error = "Password must contain at least one uppercase letter.";
+            } elseif (!preg_match('/[a-z]/', $password)) {
+                $error = "Password must contain at least one lowercase letter.";
+            } elseif (!preg_match('/[0-9]/', $password)) {
+                $error = "Password must contain at least one number.";
+            } elseif (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $password)) {
+                $error = "Password must contain at least one special character.";
             } else {
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
-                mysqli_query($conn, "UPDATE users SET password = '$hashed', reset_token = NULL, reset_expires = NULL WHERE id = {$user['id']}");
+                $ustmt = mysqli_prepare($conn, "UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?");
+                mysqli_stmt_bind_param($ustmt, "si", $hashed, $user['id']);
+                mysqli_stmt_execute($ustmt);
+                mysqli_stmt_close($ustmt);
                 $_SESSION['success'] = "Password reset successful! You can now sign in.";
                 header("Location: login.php");
                 exit();
             }
         } else {
+            mysqli_stmt_close($stmt);
             $error = "This reset link is invalid or has expired.";
             $valid = false;
         }
@@ -74,7 +94,7 @@ if ($valid) {
 
             <?php if ($valid): ?>
                 <h1 class="fade-up" style="animation-delay:0.05s;">Reset password</h1>
-                <p class="sub fade-up" style="animation-delay:0.1s;">Choose a new password for <strong><?php echo $email; ?></strong></p>
+                <p class="sub fade-up" style="animation-delay:0.1s;">Choose a new password for <strong><?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?></strong></p>
 
                 <?php if ($error): ?>
                     <div class="alert alert-red fade-up" style="animation-delay:0.1s;"><i class="fas fa-exclamation-triangle"></i> <?php echo $error; ?></div>
@@ -82,7 +102,7 @@ if ($valid) {
 
                 <form method="post" id="authForm">
                     <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                    <input type="hidden" name="token" value="<?php echo $token; ?>">
+                    <input type="hidden" name="token" value="<?php echo htmlspecialchars($token, ENT_QUOTES, 'UTF-8'); ?>">
                     <div class="form-group fade-up" style="animation-delay:0.15s;">
                         <label>New Password</label>
                         <div class="pw-wrap">

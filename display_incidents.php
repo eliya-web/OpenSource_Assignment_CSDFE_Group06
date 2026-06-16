@@ -7,15 +7,23 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$limit = 10;
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+
 $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
+$limit = 10;
 $offset = ($page - 1) * $limit;
 
-$countResult = mysqli_query($conn, "SELECT COUNT(*) as c FROM incidents");
-$totalRows = mysqli_fetch_assoc($countResult)['c'];
-$totalPages = max(1, ceil($totalRows / $limit));
+$cstmt = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM incidents");
+mysqli_stmt_execute($cstmt);
+$totalRows = mysqli_fetch_assoc(mysqli_stmt_get_result($cstmt))['c'];
+mysqli_stmt_close($cstmt);
+$totalPages = ceil($totalRows / $limit);
 
-$result = mysqli_query($conn, "SELECT * FROM incidents ORDER BY id DESC LIMIT $offset, $limit");
+$stmt = mysqli_prepare($conn, "SELECT * FROM incidents ORDER BY id DESC LIMIT ?, ?");
+mysqli_stmt_bind_param($stmt, "ii", $offset, $limit);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+mysqli_stmt_close($stmt);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -61,13 +69,13 @@ $result = mysqli_query($conn, "SELECT * FROM incidents ORDER BY id DESC LIMIT $o
                         <tbody>
                             <?php while ($row = mysqli_fetch_assoc($result)): ?>
                                 <tr>
-                                    <td><code><?php echo $row['incident_id']; ?></code></td>
-                                    <td><?php echo $row['incident_title']; ?></td>
-                                    <td><?php echo $row['incident_type']; ?></td>
-                                    <td><span class="sev-<?php echo strtolower($row['severity']); ?>"><?php echo $row['severity']; ?></span></td>
-                                    <td><?php echo $row['reporter_name']; ?></td>
+                                    <td><code><?php echo h($row['incident_id']); ?></code></td>
+                                    <td><?php echo h($row['incident_title']); ?></td>
+                                    <td><?php echo h($row['incident_type']); ?></td>
+                                    <td><span class="sev-<?php echo preg_replace('/[^a-z0-9-]/', '', strtolower($row['severity'])); ?>"><?php echo h($row['severity']); ?></span></td>
+                                    <td><?php echo h($row['reporter_name']); ?></td>
                                     <td><?php echo date('d M Y', strtotime($row['date_reported'])); ?></td>
-                                    <td><span class="st-<?php echo strtolower(str_replace(' ', '-', $row['status'])); ?>"><?php echo $row['status']; ?></span></td>
+                                    <td><span class="st-<?php echo preg_replace('/[^a-z0-9-]/', '', strtolower(str_replace(' ', '-', $row['status']))); ?>"><?php echo h($row['status']); ?></span></td>
                                     <td style="text-align:center;"><a href="view_incident.php?id=<?php echo $row['id']; ?>" class="btn btn-primary btn-sm" style="padding:4px 14px;font-size:12px;"><i class="fas fa-eye"></i> View</a></td>
                                 </tr>
                             <?php endwhile; ?>

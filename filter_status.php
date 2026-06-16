@@ -7,12 +7,20 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+function cls($s) { return preg_replace('/[^a-z0-9-]/', '', strtolower(str_replace(' ', '-', $s))); }
+
+$valid_statuses = ['Open', 'Investigating', 'Resolved', 'Closed'];
 $selected = '';
 $results  = null;
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['status'])) {
-    $selected = mysqli_real_escape_string($conn, $_POST['status']);
-    $results  = mysqli_query($conn, "SELECT * FROM incidents WHERE status = '$selected' ORDER BY id DESC");
+if ($_SERVER["REQUEST_METHOD"] == "POST" && in_array($_POST['status'], $valid_statuses)) {
+    $selected = $_POST['status'];
+    $stmt = mysqli_prepare($conn, "SELECT * FROM incidents WHERE status = ? ORDER BY id DESC");
+    mysqli_stmt_bind_param($stmt, "s", $selected);
+    mysqli_stmt_execute($stmt);
+    $results = mysqli_stmt_get_result($stmt);
+    mysqli_stmt_close($stmt);
 }
 ?>
 <!DOCTYPE html>
@@ -49,13 +57,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['status'])) {
 
         <?php if ($results !== null): ?>
             <div class="card">
-                <h2><i class="fas fa-list"></i> Status: <span class="st-<?php echo strtolower(str_replace(' ', '-', $selected)); ?>" style="padding:4px 14px;border-radius:99px;font-size:13px;font-weight:600;"><?php echo $selected; ?></span></h2>
+                <h2><i class="fas fa-list"></i> Status: <span class="st-<?php echo cls($selected); ?>" style="padding:4px 14px;border-radius:99px;font-size:13px;font-weight:600;"><?php echo h($selected); ?></span></h2>
 
                 <?php if (mysqli_num_rows($results) == 0): ?>
                     <div class="empty">
                         <div class="icon"><i class="fas fa-file-alt"></i></div>
                         <h3>No incidents found</h3>
-                        <p>No incidents with status "<?php echo $selected; ?>" exist.</p>
+                        <p>No incidents with status "<?php echo h($selected); ?>" exist.</p>
                     </div>
                 <?php else: ?>
                     <div class="table-wrap">
@@ -75,13 +83,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && !empty($_POST['status'])) {
                             <tbody>
                                 <?php while ($row = mysqli_fetch_assoc($results)): ?>
                                     <tr>
-                                        <td><code><?php echo $row['incident_id']; ?></code></td>
-                                        <td><?php echo $row['incident_title']; ?></td>
-                                        <td><?php echo $row['incident_type']; ?></td>
-                                        <td><span class="sev-<?php echo strtolower($row['severity']); ?>"><?php echo $row['severity']; ?></span></td>
-                                        <td><?php echo $row['reporter_name']; ?></td>
+                                        <td><code><?php echo h($row['incident_id']); ?></code></td>
+                                        <td><?php echo h($row['incident_title']); ?></td>
+                                        <td><?php echo h($row['incident_type']); ?></td>
+                                        <td><span class="sev-<?php echo preg_replace('/[^a-z0-9-]/', '', strtolower($row['severity'])); ?>"><?php echo h($row['severity']); ?></span></td>
+                                        <td><?php echo h($row['reporter_name']); ?></td>
                                         <td><?php echo date('d M Y', strtotime($row['date_reported'])); ?></td>
-                                        <td><span class="st-<?php echo strtolower(str_replace(' ', '-', $row['status'])); ?>"><?php echo $row['status']; ?></span></td>
+                                        <td><span class="st-<?php echo cls($row['status']); ?>"><?php echo h($row['status']); ?></span></td>
                                         <td style="text-align:center;"><a href="view_incident.php?id=<?php echo $row['id']; ?>" class="btn btn-primary btn-sm" style="padding:4px 14px;font-size:12px;"><i class="fas fa-eye"></i> View</a></td>
                                     </tr>
                                 <?php endwhile; ?>

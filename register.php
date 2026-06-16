@@ -2,6 +2,11 @@
 session_start();
 include 'db_config.php';
 
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit();
+}
+
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -11,9 +16,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission.";
     } else {
-        $full_name        = mysqli_real_escape_string($conn, $_POST['full_name']);
-        $username         = mysqli_real_escape_string($conn, $_POST['username']);
-        $email            = mysqli_real_escape_string($conn, $_POST['email']);
+        $full_name        = $_POST['full_name'];
+        $username         = $_POST['username'];
+        $email            = $_POST['email'];
         $password         = $_POST['password'];
         $confirm_password = $_POST['confirm_password'];
 
@@ -21,18 +26,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $error = "Passwords do not match.";
         } elseif (strlen($password) < 6) {
             $error = "Password must be at least 6 characters.";
+        } elseif (!preg_match('/[A-Z]/', $password)) {
+            $error = "Password must contain at least one uppercase letter.";
+        } elseif (!preg_match('/[a-z]/', $password)) {
+            $error = "Password must contain at least one lowercase letter.";
+        } elseif (!preg_match('/[0-9]/', $password)) {
+            $error = "Password must contain at least one number.";
+        } elseif (!preg_match('/[!@#$%^&*(),.?":{}|<>]/', $password)) {
+            $error = "Password must contain at least one special character.";
         } else {
-            $check = mysqli_query($conn, "SELECT * FROM users WHERE username = '$username' OR email = '$email'");
+            $cstmt = mysqli_prepare($conn, "SELECT * FROM users WHERE username = ? OR email = ?");
+            mysqli_stmt_bind_param($cstmt, "ss", $username, $email);
+            mysqli_stmt_execute($cstmt);
+            $check = mysqli_stmt_get_result($cstmt);
             if (mysqli_num_rows($check) > 0) {
+                mysqli_stmt_close($cstmt);
                 $error = "Username or email already taken.";
             } else {
+                mysqli_stmt_close($cstmt);
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
-                $sql    = "INSERT INTO users (full_name, username, email, password) VALUES ('$full_name', '$username', '$email', '$hashed')";
-                if (mysqli_query($conn, $sql)) {
+                $istmt = mysqli_prepare($conn, "INSERT INTO users (full_name, username, email, password) VALUES (?, ?, ?, ?)");
+                mysqli_stmt_bind_param($istmt, "ssss", $full_name, $username, $email, $hashed);
+                if (mysqli_stmt_execute($istmt)) {
+                    mysqli_stmt_close($istmt);
                     $_SESSION['success'] = "Account created! You can now sign in.";
                     header("Location: login.php");
                     exit();
                 } else {
+                    mysqli_stmt_close($istmt);
                     $error = "Something went wrong. Please try again.";
                 }
             }

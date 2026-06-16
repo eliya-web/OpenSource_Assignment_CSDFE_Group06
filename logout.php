@@ -6,6 +6,6 @@ if (isset($_COOKIE['remember_token'])) {
 }
 
 session_destroy();
-header("Location: login.php");
+header("Location: landing.php");
 exit();
 ?>

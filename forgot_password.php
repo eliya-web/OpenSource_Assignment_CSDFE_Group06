@@ -8,6 +8,11 @@ require 'vendor/phpmailer/Exception.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit();
+}
+
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -19,17 +24,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission. Please try again.";
     } else {
-        $email = mysqli_real_escape_string($conn, $_POST['email']);
-        $result = mysqli_query($conn, "SELECT * FROM users WHERE email = '$email'");
+        $email_raw = $_POST['email'];
+        $message = "If an account with that email exists, a reset link has been sent.";
 
-        if (mysqli_num_rows($result) === 0) {
-            $error = "No account found with that email address.";
-        } else {
+        $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE email = ?");
+        mysqli_stmt_bind_param($stmt, "s", $email_raw);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+
+        if (mysqli_num_rows($result) === 1) {
             $user  = mysqli_fetch_assoc($result);
             $token = bin2hex(random_bytes(32));
             $expires = date('Y-m-d H:i:s', time() + 3600);
 
-            mysqli_query($conn, "UPDATE users SET reset_token = '$token', reset_expires = '$expires' WHERE id = {$user['id']}");
+            $ustmt = mysqli_prepare($conn, "UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?");
+            mysqli_stmt_bind_param($ustmt, "ssi", $token, $expires, $user['id']);
+            mysqli_stmt_execute($ustmt);
+            mysqli_stmt_close($ustmt);
 
             $resetUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . "/reset_password.php?token=$token";
 
@@ -44,7 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $mail->Port       = 587;
 
                 $mail->setFrom('your-email@gmail.com', 'SIRS System');
-                $mail->addAddress($email, $user['full_name']);
+                $mail->addAddress($email_raw, $user['full_name']);
                 $mail->isHTML(true);
                 $mail->Subject = 'Password Reset - SIRS System';
                 $mail->Body    = "
@@ -57,12 +68,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ";
 
                 $mail->send();
-                $message = "Password reset link has been sent to your email.";
             } catch (Exception $e) {
-                $message = "Password reset link generated. Could not send email: " . $mail->ErrorInfo;
-                $_SESSION['success'] = $message;
+                // Silently fail — don't leak error details
             }
         }
+        mysqli_stmt_close($stmt);
     }
 }
 ?>

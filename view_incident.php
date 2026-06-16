@@ -7,9 +7,16 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+function cls($s) { return preg_replace('/[^a-z0-9-]/', '', strtolower(str_replace(' ', '-', $s))); }
+
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-$result = mysqli_query($conn, "SELECT * FROM incidents WHERE id = $id");
+$stmt = mysqli_prepare($conn, "SELECT * FROM incidents WHERE id = ?");
+mysqli_stmt_bind_param($stmt, "i", $id);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
 $incident = mysqli_fetch_assoc($result);
+mysqli_stmt_close($stmt);
 
 if (!$incident) {
     header("Location: display_incidents.php");
@@ -36,13 +43,13 @@ if (!$incident) {
         <div class="card">
             <div class="card-header">
                 <h1><i class="fas fa-file-alt"></i> Incident Details</h1>
-                <span class="st-<?php echo strtolower(str_replace(' ', '-', $incident['status'])); ?>" style="padding:4px 16px;border-radius:99px;font-size:13px;font-weight:600;"><?php echo $incident['status']; ?></span>
+                <span class="st-<?php echo cls($incident['status']); ?>" style="padding:4px 16px;border-radius:99px;font-size:13px;font-weight:600;"><?php echo h($incident['status']); ?></span>
             </div>
 
             <div class="detail-grid">
                 <div>
                     <p class="detail-label">Reference ID</p>
-                    <p class="detail-value"><code><?php echo $incident['incident_id']; ?></code></p>
+                    <p class="detail-value"><code><?php echo h($incident['incident_id']); ?></code></p>
                 </div>
                 <div>
                     <p class="detail-label">Date Reported</p>
@@ -50,19 +57,19 @@ if (!$incident) {
                 </div>
                 <div>
                     <p class="detail-label">Incident Type</p>
-                    <p class="detail-value"><?php echo $incident['incident_type']; ?></p>
+                    <p class="detail-value"><?php echo h($incident['incident_type']); ?></p>
                 </div>
                 <div>
                     <p class="detail-label">Severity</p>
-                    <p class="detail-value"><span class="sev-<?php echo strtolower($incident['severity']); ?>" style="padding:2px 12px;border-radius:99px;"><?php echo $incident['severity']; ?></span></p>
+                    <p class="detail-value"><span class="sev-<?php echo preg_replace('/[^a-z0-9-]/', '', strtolower($incident['severity'])); ?>" style="padding:2px 12px;border-radius:99px;"><?php echo h($incident['severity']); ?></span></p>
                 </div>
                 <div>
                     <p class="detail-label">Reported By</p>
-                    <p class="detail-value"><i class="fas fa-user" style="color:var(--text-light);margin-right:6px;"></i><?php echo $incident['reporter_name']; ?></p>
+                    <p class="detail-value"><i class="fas fa-user" style="color:var(--text-light);margin-right:6px;"></i><?php echo h($incident['reporter_name']); ?></p>
                 </div>
                 <div>
                     <p class="detail-label">Status</p>
-                    <p class="detail-value"><?php echo $incident['status']; ?></p>
+                    <p class="detail-value"><?php echo h($incident['status']); ?></p>
                 </div>
             </div>
 
@@ -70,12 +77,12 @@ if (!$incident) {
 
             <div>
                 <p class="detail-label">Incident Title</p>
-                <p class="incident-title"><?php echo $incident['incident_title']; ?></p>
+                <p class="incident-title"><?php echo h($incident['incident_title']); ?></p>
             </div>
 
             <div>
                 <p class="detail-label">Description</p>
-                <p class="incident-desc"><?php echo $incident['description']; ?></p>
+                <p class="incident-desc"><?php echo h($incident['description']); ?></p>
             </div>
         </div>
     </div>

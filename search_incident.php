@@ -7,10 +7,17 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
+
 $results = null;
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $search = mysqli_real_escape_string($conn, $_POST['search']);
-    $results = mysqli_query($conn, "SELECT * FROM incidents WHERE incident_id LIKE '%$search%' OR incident_title LIKE '%$search%' OR reporter_name LIKE '%$search%' ORDER BY id DESC");
+    $search_raw = $_POST['search'];
+    $search_param = "%$search_raw%";
+    $stmt = mysqli_prepare($conn, "SELECT * FROM incidents WHERE incident_id LIKE ? OR incident_title LIKE ? OR reporter_name LIKE ? ORDER BY id DESC");
+    mysqli_stmt_bind_param($stmt, "sss", $search_param, $search_param, $search_param);
+    mysqli_stmt_execute($stmt);
+    $results = mysqli_stmt_get_result($stmt);
+    mysqli_stmt_close($stmt);
 }
 ?>
 <!DOCTYPE html>
@@ -66,16 +73,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </thead>
                             <tbody>
                                 <?php while ($row = mysqli_fetch_assoc($results)): ?>
-                                    <tr>
-                                        <td><code><?php echo $row['incident_id']; ?></code></td>
-                                        <td><?php echo $row['incident_title']; ?></td>
-                                        <td><?php echo $row['incident_type']; ?></td>
-                                        <td><span class="sev-<?php echo strtolower($row['severity']); ?>"><?php echo $row['severity']; ?></span></td>
-                                        <td><?php echo $row['reporter_name']; ?></td>
-                                        <td><?php echo date('d M Y', strtotime($row['date_reported'])); ?></td>
-                                        <td><span class="st-<?php echo strtolower(str_replace(' ', '-', $row['status'])); ?>"><?php echo $row['status']; ?></span></td>
-                                        <td style="text-align:center;"><a href="view_incident.php?id=<?php echo $row['id']; ?>" class="btn btn-primary btn-sm" style="padding:4px 14px;font-size:12px;"><i class="fas fa-eye"></i> View</a></td>
-                                    </tr>
+                                <tr>
+                                    <td><code><?php echo h($row['incident_id']); ?></code></td>
+                                    <td><?php echo h($row['incident_title']); ?></td>
+                                    <td><?php echo h($row['incident_type']); ?></td>
+                                    <td><span class="sev-<?php echo preg_replace('/[^a-z0-9-]/', '', strtolower($row['severity'])); ?>"><?php echo h($row['severity']); ?></span></td>
+                                    <td><?php echo h($row['reporter_name']); ?></td>
+                                    <td><?php echo date('d M Y', strtotime($row['date_reported'])); ?></td>
+                                    <td><span class="st-<?php echo preg_replace('/[^a-z0-9-]/', '', strtolower(str_replace(' ', '-', $row['status']))); ?>"><?php echo h($row['status']); ?></span></td>
+                                    <td style="text-align:center;"><a href="view_incident.php?id=<?php echo $row['id']; ?>" class="btn btn-primary btn-sm" style="padding:4px 14px;font-size:12px;"><i class="fas fa-eye"></i> View</a></td>
+                                </tr>
                                 <?php endwhile; ?>
                             </tbody>
                         </table>

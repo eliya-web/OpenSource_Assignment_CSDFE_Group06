@@ -13,7 +13,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $severity  = mysqli_real_escape_string($conn, $_POST['severity']);
     $desc      = mysqli_real_escape_string($conn, $_POST['description']);
     $reporter  = mysqli_real_escape_string($conn, $_POST['reporter_name']);
-    $incident_id = strtoupper(substr(md5(uniqid()), 0, 8));
+    $incident_id = "INC-" . strtoupper(substr(md5(uniqid()), 0, 8));
 
     $sql = "INSERT INTO incidents (incident_id, incident_title, incident_type, severity, description, reporter_name, status)
             VALUES ('$incident_id', '$title', '$type', '$severity', '$desc', '$reporter', 'Open')";

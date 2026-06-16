@@ -7,7 +7,14 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $error = "Invalid form submission. Please try again.";
+    } else {
     $title     = $_POST['incident_title'];
     $type      = $_POST['incident_type'];
     $severity  = $_POST['severity'];
@@ -24,6 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         mysqli_stmt_close($stmt);
         $error = "Something went wrong. Please try again.";
+    }
     }
 }
 ?>
@@ -53,6 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php endif; ?>
 
             <form method="post">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="form-grid">
                     <div class="form-group">
                         <label><i class="fas fa-heading"></i> Incident Title</label>

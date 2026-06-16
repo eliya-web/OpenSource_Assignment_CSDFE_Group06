@@ -10,17 +10,25 @@ if (!isset($_SESSION['user_id'])) {
 function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 function cls($s) { return preg_replace('/[^a-z0-9-]/', '', strtolower(str_replace(' ', '-', $s))); }
 
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $valid_statuses = ['Open', 'Investigating', 'Resolved', 'Closed'];
 $selected = '';
 $results  = null;
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && in_array($_POST['status'], $valid_statuses)) {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $results = 'invalid';
+    } else {
     $selected = $_POST['status'];
     $stmt = mysqli_prepare($conn, "SELECT * FROM incidents WHERE status = ? ORDER BY id DESC");
     mysqli_stmt_bind_param($stmt, "s", $selected);
     mysqli_stmt_execute($stmt);
     $results = mysqli_stmt_get_result($stmt);
     mysqli_stmt_close($stmt);
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -42,6 +50,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && in_array($_POST['status'], $valid_st
             </div>
 
             <form method="post" style="display:flex;gap:10px;">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="form-group" style="margin:0;flex:1;">
                     <select name="status" required>
                         <option value="">Select status</option>
@@ -55,7 +64,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && in_array($_POST['status'], $valid_st
             </form>
         </div>
 
-        <?php if ($results !== null): ?>
+        <?php if ($results === 'invalid'): ?>
+            <div class="alert alert-red"><i class="fas fa-times-circle"></i> Invalid form submission.</div>
+        <?php elseif ($results !== null): ?>
             <div class="card">
                 <h2><i class="fas fa-list"></i> Status: <span class="st-<?php echo cls($selected); ?>" style="padding:4px 14px;border-radius:99px;font-size:13px;font-weight:600;"><?php echo h($selected); ?></span></h2>
 

@@ -2,6 +2,11 @@
 session_start();
 include 'db_config.php';
 
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit();
+}
+
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }

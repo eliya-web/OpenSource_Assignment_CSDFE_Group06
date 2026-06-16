@@ -9,8 +9,15 @@ if (!isset($_SESSION['user_id'])) {
 
 function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $results = null;
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $results = 'invalid';
+    } else {
     $search_raw = $_POST['search'];
     $search_param = "%$search_raw%";
     $stmt = mysqli_prepare($conn, "SELECT * FROM incidents WHERE incident_id LIKE ? OR incident_title LIKE ? OR reporter_name LIKE ? ORDER BY id DESC");
@@ -18,6 +25,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     mysqli_stmt_execute($stmt);
     $results = mysqli_stmt_get_result($stmt);
     mysqli_stmt_close($stmt);
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -39,6 +47,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
 
             <form method="post" style="display:flex;gap:10px;">
+                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                 <div class="form-group" style="margin:0;flex:1;">
                     <input type="text" name="search" placeholder="Search by title or reporter name..." required>
                 </div>
@@ -46,7 +55,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </form>
         </div>
 
-        <?php if ($results !== null): ?>
+        <?php if ($results === 'invalid'): ?>
+            <div class="alert alert-red"><i class="fas fa-times-circle"></i> Invalid form submission.</div>
+        <?php elseif ($results !== null): ?>
             <div class="card">
                 <h2><i class="fas fa-list"></i> Search Results</h2>
 

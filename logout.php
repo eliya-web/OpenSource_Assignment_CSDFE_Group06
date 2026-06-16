@@ -1,6 +1,11 @@
 <?php
 session_start();
 
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
 if (isset($_COOKIE['remember_token'])) {
     setcookie('remember_token', '', time() - 3600, '/');
 }

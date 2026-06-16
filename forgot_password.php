@@ -24,6 +24,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission. Please try again.";
     } else {
+        // ===== IP Rate Limit (5 requests / 15 min) =====
+        $ip = $_SERVER['REMOTE_ADDR'];
+        $cutoff = date('Y-m-d H:i:s', time() - 900);
+        $ipCheck = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM login_attempts WHERE ip_address = ? AND attempted_at > ?");
+        mysqli_stmt_bind_param($ipCheck, "ss", $ip, $cutoff);
+        mysqli_stmt_execute($ipCheck);
+        $ipCount = mysqli_fetch_assoc(mysqli_stmt_get_result($ipCheck))['c'];
+        mysqli_stmt_close($ipCheck);
+
+        if ($ipCount >= 5) {
+            $error = "Too many requests. Please try again later.";
+        } else {
         $email_raw = $_POST['email'];
         $message = "If an account with that email exists, a reset link has been sent.";
 
@@ -74,6 +86,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
         mysqli_stmt_close($stmt);
     }
+}
 }
 ?>
 <!DOCTYPE html>

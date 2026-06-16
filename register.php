@@ -16,13 +16,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission.";
     } else {
-        $full_name        = $_POST['full_name'];
-        $username         = $_POST['username'];
-        $email            = $_POST['email'];
+        $full_name        = trim($_POST['full_name']);
+        $username         = trim($_POST['username']);
+        $email            = trim($_POST['email']);
         $password         = $_POST['password'];
         $confirm_password = $_POST['confirm_password'];
 
-        if ($password !== $confirm_password) {
+        // ===== Input Validation =====
+        if (strlen($full_name) < 2 || strlen($full_name) > 100) {
+            $error = "Full name must be between 2 and 100 characters.";
+        } elseif (!preg_match('/^[a-zA-ZÀ-ÿ\'\s-]+$/', $full_name)) {
+            $error = "Full name contains invalid characters.";
+        } elseif (!preg_match('/^[a-zA-Z0-9_]{3,30}$/', $username)) {
+            $error = "Username must be 3-30 alphanumeric characters or underscores.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = "Invalid email address format.";
+        } elseif (strlen($email) > 255) {
+            $error = "Email address is too long.";
+        } elseif ($password !== $confirm_password) {
             $error = "Passwords do not match.";
         } elseif (strlen($password) < 6) {
             $error = "Password must be at least 6 characters.";

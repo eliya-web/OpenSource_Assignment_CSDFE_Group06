@@ -63,4 +63,5 @@ if (!$conn) {
     error_log("DB connection failed: " . mysqli_connect_error());
     die("System temporarily unavailable. Please try again later.");
 }
+function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 ?>

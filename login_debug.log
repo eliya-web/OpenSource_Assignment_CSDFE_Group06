@@ -1,0 +1,3 @@
+2026-06-16 21:01:34 [EXCEPTION] mysqli_stmt_free_result(): Argument #1 ($statement) must be of type mysqli_stmt, mysqli_result given in C:\xampp\htdocs\OpenSource_Assignment_CSDFE_Group06\login.php:88
+2026-06-16 21:01:36 [EXCEPTION] mysqli_stmt_free_result(): Argument #1 ($statement) must be of type mysqli_stmt, mysqli_result given in C:\xampp\htdocs\OpenSource_Assignment_CSDFE_Group06\login.php:88
+2026-06-16 21:41:12 [FATAL] Cannot redeclare h() (previously declared in C:\xampp\htdocs\OpenSource_Assignment_CSDFE_Group06\index.php:21) in C:\xampp\htdocs\OpenSource_Assignment_CSDFE_Group06\navbar.php:5

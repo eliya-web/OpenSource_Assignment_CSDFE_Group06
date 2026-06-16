@@ -1,4 +1,15 @@
 <?php
+ini_set('log_errors', 1);
+$errorLogPath = __DIR__ . '/login_debug.log';
+ini_set('error_log', $errorLogPath);
+
+register_shutdown_function(function() use ($errorLogPath) {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
+        file_put_contents($errorLogPath, date('Y-m-d H:i:s') . ' [FATAL] ' . $err['message'] . ' in ' . $err['file'] . ':' . $err['line'] . PHP_EOL, FILE_APPEND);
+    }
+});
+
 session_start();
 include 'db_config.php';
 
@@ -7,28 +18,35 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
-
 function countAll($conn) {
     $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM incidents");
+    if (!$stmt) return 0;
     mysqli_stmt_execute($stmt);
-    $c = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['c'];
+    $res = mysqli_stmt_get_result($stmt);
+    $c = $res ? (int)mysqli_fetch_assoc($res)['c'] : 0;
     mysqli_stmt_close($stmt);
     return $c;
 }
 function countWhere($conn, $field, $value) {
     $stmt = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM incidents WHERE $field = ?");
+    if (!$stmt) return 0;
     mysqli_stmt_bind_param($stmt, "s", $value);
     mysqli_stmt_execute($stmt);
-    $c = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['c'];
+    $res = mysqli_stmt_get_result($stmt);
+    $c = $res ? (int)mysqli_fetch_assoc($res)['c'] : 0;
     mysqli_stmt_close($stmt);
     return $c;
 }
 
-$total    = countAll($conn);
-$open     = countWhere($conn, "status", "Open");
-$resolved = countWhere($conn, "status", "Resolved");
-$critical = countWhere($conn, "severity", "Critical");
+try {
+    $total    = countAll($conn);
+    $open     = countWhere($conn, "status", "Open");
+    $resolved = countWhere($conn, "status", "Resolved");
+    $critical = countWhere($conn, "severity", "Critical");
+} catch (Throwable $e) {
+    file_put_contents($errorLogPath, date('Y-m-d H:i:s') . ' [EXCEPTION] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL, FILE_APPEND);
+    $total = $open = $resolved = $critical = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

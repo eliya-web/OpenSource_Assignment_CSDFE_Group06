@@ -2,7 +2,6 @@
 $page = basename($_SERVER['PHP_SELF']);
 $u = htmlspecialchars($_SESSION['username'], ENT_QUOTES, 'UTF-8');
 $initial = strtoupper(substr($u, 0, 1));
-function h($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 ?>
 <nav class="navbar">
     <a href="index.php" class="navbar-brand">

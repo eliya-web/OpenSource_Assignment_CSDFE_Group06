@@ -1,6 +1,12 @@
 <?php
 session_start();
 include 'db_config.php';
+require 'vendor/phpmailer/PHPMailer.php';
+require 'vendor/phpmailer/SMTP.php';
+require 'vendor/phpmailer/Exception.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 if (!isset($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -8,8 +14,6 @@ if (!isset($_SESSION['csrf_token'])) {
 
 $message = null;
 $error   = null;
-$showLink = false;
-$resetUrl = '';
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
@@ -23,14 +27,41 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
             $user  = mysqli_fetch_assoc($result);
             $token = bin2hex(random_bytes(32));
-            $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+            $expires = date('Y-m-d H:i:s', time() + 3600);
 
             mysqli_query($conn, "UPDATE users SET reset_token = '$token', reset_expires = '$expires' WHERE id = {$user['id']}");
 
-            $message = "Password reset link has been generated.";
-            $showLink = true;
-            $resetUrl = "reset_password.php?token=$token";
-            $_SESSION['success'] = $message;
+            $resetUrl = (isset($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . "/reset_password.php?token=$token";
+
+            $mail = new PHPMailer(true);
+            try {
+                $mail->isSMTP();
+                $mail->Host       = 'smtp.gmail.com';
+                $mail->SMTPAuth   = true;
+                $mail->Username   = 'your-email@gmail.com';
+                $mail->Password   = 'your-app-password';
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                $mail->Port       = 587;
+
+                $mail->setFrom('your-email@gmail.com', 'SIRS System');
+                $mail->addAddress($email, $user['full_name']);
+                $mail->isHTML(true);
+                $mail->Subject = 'Password Reset - SIRS System';
+                $mail->Body    = "
+                    <p>Hello <strong>{$user['full_name']}</strong>,</p>
+                    <p>You requested a password reset for your SIRS account.</p>
+                    <p><a href='$resetUrl' style='display:inline-block;padding:12px 24px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;'>Reset Password</a></p>
+                    <p>Or copy this link:<br><code>$resetUrl</code></p>
+                    <p>This link expires in <strong>1 hour</strong>.</p>
+                    <p>If you did not request this, ignore this email.</p>
+                ";
+
+                $mail->send();
+                $message = "Password reset link has been sent to your email.";
+            } catch (Exception $e) {
+                $message = "Password reset link generated. Could not send email: " . $mail->ErrorInfo;
+                $_SESSION['success'] = $message;
+            }
         }
     }
 }
@@ -56,11 +87,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <?php endif; ?>
 
             <?php if ($message): ?>
-                <div class="alert alert-green fade-up" style="animation-delay:0.1s;"><i class="fas fa-check"></i> <?php echo $message; ?></div>
-            <?php endif; ?>
-
-            <?php if ($showLink): ?>
-                <div class="alert alert-blue fade-up" style="animation-delay:0.15s;"><i class="fas fa-link"></i> Reset link: <a href="<?php echo $resetUrl; ?>" style="color:inherit;text-decoration:underline;">Click here to reset</a></div>
+                <div class="alert alert-green fade-up" style="animation-delay:0.1s;"><i class="fas fa-check-circle"></i> <?php echo $message; ?></div>
             <?php endif; ?>
 
             <form method="post" id="authForm">

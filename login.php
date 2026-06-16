@@ -1,13 +1,17 @@
 <?php
+ini_set('log_errors', 1);
+$errorLogPath = __DIR__ . '/login_debug.log';
+ini_set('error_log', $errorLogPath);
+
+register_shutdown_function(function() use ($errorLogPath) {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
+        file_put_contents($errorLogPath, date('Y-m-d H:i:s') . ' [FATAL] ' . $err['message'] . ' in ' . $err['file'] . ':' . $err['line'] . PHP_EOL, FILE_APPEND);
+    }
+});
+
 session_start();
 include 'db_config.php';
-
-mysqli_query($conn, "CREATE TABLE IF NOT EXISTS login_attempts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    ip_address VARCHAR(45) NOT NULL,
-    attempted_at DATETIME NOT NULL,
-    INDEX idx_ip_time (ip_address, attempted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
 if (isset($_SESSION['user_id'])) {
     header("Location: index.php");
@@ -54,102 +58,95 @@ if (isset($_SESSION['expired'])) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        $error = "Invalid form submission.";
-    } else {
-        // ===== IP-based Rate Limiting =====
-        $ip = $_SERVER['REMOTE_ADDR'];
-        $cutoff = date('Y-m-d H:i:s', time() - 900); // 15 min window
-        $ipCleanup = mysqli_prepare($conn, "DELETE FROM login_attempts WHERE attempted_at < ?");
-        mysqli_stmt_bind_param($ipCleanup, "s", $cutoff);
-        mysqli_stmt_execute($ipCleanup);
-        mysqli_stmt_close($ipCleanup);
-
-        $ipCheck = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM login_attempts WHERE ip_address = ? AND attempted_at > ?");
-        mysqli_stmt_bind_param($ipCheck, "ss", $ip, $cutoff);
-        mysqli_stmt_execute($ipCheck);
-        $ipCount = mysqli_fetch_assoc(mysqli_stmt_get_result($ipCheck))['c'];
-        mysqli_stmt_close($ipCheck);
-
-        if ($ipCount >= 10) {
-            $error = "Too many attempts from your IP. Please try again later.";
+    try {
+        if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+            $error = "Invalid form submission.";
         } else {
-        $username_raw = $_POST['username'];
-        $password = $_POST['password'];
+                $username_raw = $_POST['username'];
+                $password = $_POST['password'];
 
-        $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE username = ?");
-        mysqli_stmt_bind_param($stmt, "s", $username_raw);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $user = mysqli_fetch_assoc($result);
-        $found = $user !== null;
-        mysqli_stmt_close($stmt);
-
-        // ===== Timing-Attack-Proof Login =====
-        // Always use a real hash path, even for non-existent users
-        $fakeHash = '$2y$10$' . str_repeat('x', 53);
-        $hash = $found ? $user['password'] : $fakeHash;
-        $locked = $found && $user['locked_until'] && strtotime($user['locked_until']) > time();
-
-        if ($locked) {
-            $error = "Invalid credentials.";
-        } elseif (password_verify($password, $hash)) {
-            // ===== Successful Login =====
-            $ustmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?");
-            mysqli_stmt_bind_param($ustmt, "i", $user['id']);
-            mysqli_stmt_execute($ustmt);
-            mysqli_stmt_close($ustmt);
-
-            session_regenerate_id(true);
-            $_SESSION['last_activity'] = time();
-            $_SESSION['user_id']   = $user['id'];
-            $_SESSION['full_name'] = $user['full_name'];
-            $_SESSION['username']  = $user['username'];
-            $_SESSION['role']      = $user['role'];
-
-            // ===== Remember Me =====
-            if (isset($_POST['remember'])) {
-                $remember_token = bin2hex(random_bytes(32));
-                $rstmt = mysqli_prepare($conn, "UPDATE users SET remember_token = ? WHERE id = ?");
-                mysqli_stmt_bind_param($rstmt, "si", $remember_token, $user['id']);
-                mysqli_stmt_execute($rstmt);
-                mysqli_stmt_close($rstmt);
-                setcookie('remember_token', $remember_token, [
-                    'expires'  => time() + 86400 * 30,
-                    'path'     => '/',
-                    'httponly' => true,
-                    'samesite' => 'Strict'
-                ]);
-            }
-
-            header("Location: index.php");
-            exit();
-        } else {
-            // ===== Failed Login =====
-            if ($found) {
-                $attempts = $user['failed_attempts'] + 1;
-                if ($attempts >= 5) {
-                    $lock_time = date('Y-m-d H:i:s', time() + 900);
-                    $fstmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?");
-                    mysqli_stmt_bind_param($fstmt, "isi", $attempts, $lock_time, $user['id']);
-                    mysqli_stmt_execute($fstmt);
-                    mysqli_stmt_close($fstmt);
+                $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE username = ?");
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "s", $username_raw);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+                    $user = mysqli_fetch_assoc($result);
+                    $found = $user !== null;
+                    mysqli_stmt_close($stmt);
                 } else {
-                    $fstmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = ? WHERE id = ?");
-                    mysqli_stmt_bind_param($fstmt, "ii", $attempts, $user['id']);
-                    mysqli_stmt_execute($fstmt);
-                    mysqli_stmt_close($fstmt);
+                    $found = false;
+                }
+
+                // ===== Timing-Attack-Proof Login =====
+                $fakeHash = '$2y$10$' . str_repeat('x', 53);
+                $hash = $found ? $user['password'] : $fakeHash;
+                $locked = $found && !empty($user['locked_until']) && strtotime($user['locked_until']) > time();
+
+                if ($locked) {
+                    $error = "Invalid credentials.";
+                } elseif (password_verify($password, $hash)) {
+                    // ===== Successful Login =====
+                    $ustmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?");
+                    if ($ustmt) {
+                        mysqli_stmt_bind_param($ustmt, "i", $user['id']);
+                        mysqli_stmt_execute($ustmt);
+                        mysqli_stmt_close($ustmt);
+                    }
+
+                    session_regenerate_id(true);
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['user_id']   = $user['id'];
+                    $_SESSION['full_name'] = $user['full_name'];
+                    $_SESSION['username']  = $user['username'];
+                    $_SESSION['role']      = $user['role'];
+
+                    // ===== Remember Me =====
+                    if (isset($_POST['remember'])) {
+                        $remember_token = bin2hex(random_bytes(32));
+                        $rstmt = mysqli_prepare($conn, "UPDATE users SET remember_token = ? WHERE id = ?");
+                        if ($rstmt) {
+                            mysqli_stmt_bind_param($rstmt, "si", $remember_token, $user['id']);
+                            mysqli_stmt_execute($rstmt);
+                            mysqli_stmt_close($rstmt);
+                        }
+                        setcookie('remember_token', $remember_token, [
+                            'expires'  => time() + 86400 * 30,
+                            'path'     => '/',
+                            'httponly' => true,
+                            'samesite' => 'Strict'
+                        ]);
+                    }
+
+                    header("Location: index.php");
+                    exit();
+                } else {
+                    // ===== Failed Login =====
+                    if ($found) {
+                        $attempts = $user['failed_attempts'] + 1;
+                        if ($attempts >= 5) {
+                            $lock_time = date('Y-m-d H:i:s', time() + 900);
+                            $fstmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?");
+                            if ($fstmt) {
+                                mysqli_stmt_bind_param($fstmt, "isi", $attempts, $lock_time, $user['id']);
+                                mysqli_stmt_execute($fstmt);
+                                mysqli_stmt_close($fstmt);
+                            }
+                        } else {
+                            $fstmt = mysqli_prepare($conn, "UPDATE users SET failed_attempts = ? WHERE id = ?");
+                            if ($fstmt) {
+                                mysqli_stmt_bind_param($fstmt, "ii", $attempts, $user['id']);
+                                mysqli_stmt_execute($fstmt);
+                                mysqli_stmt_close($fstmt);
+                            }
+                        }
+                    }
+                    $error = "Invalid credentials.";
                 }
             }
-            // Always log the IP attempt (timing-consistent path)
-            $lstmt = mysqli_prepare($conn, "INSERT INTO login_attempts (ip_address, attempted_at) VALUES (?, NOW())");
-            mysqli_stmt_bind_param($lstmt, "s", $ip);
-            mysqli_stmt_execute($lstmt);
-            mysqli_stmt_close($lstmt);
-            $error = "Invalid credentials.";
-        }
+        } catch (Throwable $e) {
+        file_put_contents($errorLogPath, date('Y-m-d H:i:s') . ' [EXCEPTION] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL, FILE_APPEND);
+        $error = "An unexpected error occurred. Please try again.";
     }
-}
 }
 ?>
 <!DOCTYPE html>

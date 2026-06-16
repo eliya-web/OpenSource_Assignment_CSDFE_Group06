@@ -3,12 +3,14 @@ error_reporting(0);
 ini_set('display_errors', 0);
 
 // ===== Host Header Validation =====
-$liveHost = 'sirs-system.infinityfreeapp.com';
+$liveHost = 'sirsproject.infinityfreeapp.com';
 $allowedHosts = [
     'localhost', 'localhost:80', 'localhost:3307', '127.0.0.1', '127.0.0.1:80', '127.0.0.1:3307',
     $liveHost, "www.$liveHost"
 ];
-if (isset($_SERVER['HTTP_HOST']) && !in_array($_SERVER['HTTP_HOST'], $allowedHosts)) {
+$host = $_SERVER['HTTP_HOST'] ?? '';
+$isNgrok = preg_match('/\.ngrok-free\.dev$/', $host);
+if (isset($_SERVER['HTTP_HOST']) && !in_array($_SERVER['HTTP_HOST'], $allowedHosts) && !$isNgrok) {
     header("HTTP/1.1 400 Bad Request");
     die("Bad request.");
 }

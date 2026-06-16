@@ -2,6 +2,13 @@
 session_start();
 include 'db_config.php';
 
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS login_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(45) NOT NULL,
+    attempted_at DATETIME NOT NULL,
+    INDEX idx_ip_time (ip_address, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
 if (isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
@@ -39,10 +46,34 @@ if (!isset($_SESSION['csrf_token'])) {
 }
 
 $error = null;
+
+// ===== Display expired session message =====
+if (isset($_SESSION['expired'])) {
+    $error = $_SESSION['expired'];
+    unset($_SESSION['expired']);
+}
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $error = "Invalid form submission.";
     } else {
+        // ===== IP-based Rate Limiting =====
+        $ip = $_SERVER['REMOTE_ADDR'];
+        $cutoff = date('Y-m-d H:i:s', time() - 900); // 15 min window
+        $ipCleanup = mysqli_prepare($conn, "DELETE FROM login_attempts WHERE attempted_at < ?");
+        mysqli_stmt_bind_param($ipCleanup, "s", $cutoff);
+        mysqli_stmt_execute($ipCleanup);
+        mysqli_stmt_close($ipCleanup);
+
+        $ipCheck = mysqli_prepare($conn, "SELECT COUNT(*) as c FROM login_attempts WHERE ip_address = ? AND attempted_at > ?");
+        mysqli_stmt_bind_param($ipCheck, "ss", $ip, $cutoff);
+        mysqli_stmt_execute($ipCheck);
+        $ipCount = mysqli_fetch_assoc(mysqli_stmt_get_result($ipCheck))['c'];
+        mysqli_stmt_close($ipCheck);
+
+        if ($ipCount >= 10) {
+            $error = "Too many attempts from your IP. Please try again later.";
+        } else {
         $username_raw = $_POST['username'];
         $password = $_POST['password'];
 
@@ -67,6 +98,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 mysqli_stmt_close($ustmt);
 
                 session_regenerate_id(true);
+                $_SESSION['last_activity'] = time();
                 $_SESSION['user_id']   = $user['id'];
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['username']  = $user['username'];
@@ -107,12 +139,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $remaining = 5 - $attempts;
                     $error = "Invalid password. $remaining attempt(s) remaining before lockout.";
                 }
+                $lstmt = mysqli_prepare($conn, "INSERT INTO login_attempts (ip_address, attempted_at) VALUES (?, NOW())");
+                mysqli_stmt_bind_param($lstmt, "s", $ip);
+                mysqli_stmt_execute($lstmt);
+                mysqli_stmt_close($lstmt);
             }
         } else {
             mysqli_stmt_close($stmt);
             $error = "Invalid credentials.";
+            $lstmt = mysqli_prepare($conn, "INSERT INTO login_attempts (ip_address, attempted_at) VALUES (?, NOW())");
+            mysqli_stmt_bind_param($lstmt, "s", $ip);
+            mysqli_stmt_execute($lstmt);
+            mysqli_stmt_close($lstmt);
         }
     }
+}
 }
 ?>
 <!DOCTYPE html>
@@ -168,7 +209,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
 
     <div class="page-transition" id="pageTransition"></div>
-    <script>(function(){var e=document.getElementById('pageTransition');if(sessionStorage.getItem('sirs_ts')==='1'){sessionStorage.removeItem('sirs_ts');window.__sirs=1;e.style.transform='translateX(0)';e.style.transition='none'}else{e.style.transform='translateX(100%)';e.style.transition='none'}})()</script>
     <div id="toast-wrap"></div>
     <script src="script.js"></script>
 </body>

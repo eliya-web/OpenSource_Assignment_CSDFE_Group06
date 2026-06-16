@@ -141,21 +141,7 @@ if (isset($_SESSION['user_id'])) {
     </div>
 
     <div class="page-transition" id="pageTransition"></div>
-    <script>(function(){var e=document.getElementById('pageTransition');if(sessionStorage.getItem('sirs_ts')==='1'){sessionStorage.removeItem('sirs_ts');window.__sirs=1;e.style.transform='translateX(0)';e.style.transition='none'}else{e.style.transform='translateX(100%)';e.style.transition='none'}})()</script>
-    <script>
-    (function(){
-        var btn=document.getElementById('mobileMenuBtn');
-        btn.addEventListener('click',function(){
-            document.querySelector('.landing-nav-links').classList.toggle('open');
-            var icon=this.querySelector('i');
-            icon.classList.toggle('fa-bars');
-            icon.classList.toggle('fa-times');
-        });
-        document.querySelector('.landing-scroll').addEventListener('click',function(){
-            document.getElementById('features').scrollIntoView({behavior:'smooth'});
-        });
-    })();
-    </script>
+    <div id="toast-wrap"></div>
     <script src="script.js"></script>
 </body>
 </html>

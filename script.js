@@ -1,3 +1,37 @@
+// ===== Page Transition — sync (runs before paint) =====
+(function(){
+    var e = document.getElementById('pageTransition');
+    if (!e) return;
+    if (sessionStorage.getItem('sirs_ts') === '1') {
+        sessionStorage.removeItem('sirs_ts');
+        window.__sirs = 1;
+        e.style.transform = 'translateX(0)';
+        e.style.transition = 'none';
+    } else {
+        e.style.transform = 'translateX(100%)';
+        e.style.transition = 'none';
+    }
+})();
+
+// ===== Landing Page — Mobile Menu & Smooth Scroll =====
+(function(){
+    var btn = document.getElementById('mobileMenuBtn');
+    if (btn) {
+        btn.addEventListener('click', function(){
+            document.querySelector('.landing-nav-links').classList.toggle('open');
+            var icon = this.querySelector('i');
+            if (icon) { icon.classList.toggle('fa-bars'); icon.classList.toggle('fa-times'); }
+        });
+    }
+    var scrollBtn = document.querySelector('.landing-scroll');
+    if (scrollBtn) {
+        scrollBtn.addEventListener('click', function(){
+            var target = document.getElementById('features');
+            if (target) target.scrollIntoView({behavior:'smooth'});
+        });
+    }
+})();
+
 document.addEventListener('DOMContentLoaded', function () {
 
     // ===== Slideshow Page Transition =====

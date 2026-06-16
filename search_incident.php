@@ -10,7 +10,7 @@ if (!isset($_SESSION['user_id'])) {
 $results = null;
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $search = mysqli_real_escape_string($conn, $_POST['search']);
-    $results = mysqli_query($conn, "SELECT * FROM incidents WHERE incident_title LIKE '%$search%' OR reporter_name LIKE '%$search%' ORDER BY id DESC");
+    $results = mysqli_query($conn, "SELECT * FROM incidents WHERE incident_id LIKE '%$search%' OR incident_title LIKE '%$search%' OR reporter_name LIKE '%$search%' ORDER BY id DESC");
 }
 ?>
 <!DOCTYPE html>
